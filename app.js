@@ -12,6 +12,7 @@ const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial
 // Funkcja do inicjalizacji Firebase
 async function initializeFirebase() {
     // Ustawia poziom logowania Firebase dla debugowania
+    // UWAGA: W wersji produkcyjnej warto zmienić na 'silent' lub 'warn'
     firebase.setLogLevel('Debug');
 
     if (firebaseConfig.apiKey) {
@@ -25,6 +26,7 @@ async function initializeFirebase() {
                 await auth.signInWithCustomToken(initialAuthToken);
                 console.log("Zalogowano z tokenem.");
             } else {
+                // Jeśli nie ma tokenu (np. lokalne testy poza środowiskiem), zaloguj anonimowo
                 await auth.signInAnonymously();
                 console.log("Zalogowano anonimowo.");
             }
@@ -38,7 +40,7 @@ async function initializeFirebase() {
 
         } catch (e) {
             console.error("Błąd inicjalizacji Firebase:", e);
-            // W razie błędu, uruchom aplikację w trybie offline (bez zapisu)
+            // W razie błędu, uruchom aplikację w trybie "offline" (bez zapisu)
             app.init(false); // false = tryb offline
         }
     } else {
@@ -74,7 +76,7 @@ async function loadUserData() {
             state.plan10Days = userData.plan10Days || [];
             state.completedExercises = userData.completedExercises || [];
             state.readArticles = userData.readArticles || [];
-            state.badges = userData.badges || state.badges; // Zachowaj domyślne, jeśli nie ma w bazie
+            state.badges = state.badges; // Użyj domyślnych odznak z kodu
             state.points = userData.points || 0;
             state.streak = userData.streak || 0;
             state.lastActivityDate = userData.lastActivityDate || null;
@@ -82,12 +84,14 @@ async function loadUserData() {
             state.quizBonusAwarded = userData.quizBonusAwarded || false;
 
             // Sprawdź, czy stan odznak jest zsynchronizowany (na wypadek dodania nowych)
-            state.badges.forEach(badge => {
-                const savedBadge = userData.badges?.find(b => b.id === badge.id);
-                if (savedBadge) {
-                    badge.unlocked = savedBadge.unlocked;
-                }
-            });
+            if (userData.badges && Array.isArray(userData.badges)) {
+                state.badges.forEach(badge => {
+                    const savedBadge = userData.badges.find(b => b.id === badge.id);
+                    if (savedBadge) {
+                        badge.unlocked = savedBadge.unlocked;
+                    }
+                });
+            }
 
             // Uruchom aplikację z załadowanymi danymi
             app.init(true); // true = dane załadowane
@@ -95,6 +99,8 @@ async function loadUserData() {
         } else {
             // Brak danych. To pierwsza wizyta.
             console.log("Brak danych użytkownika w Firestore. Pokazuję ekran powitalny.");
+            // Zainicjuj domyślny stan odznak (wszystkie zablokowane)
+            state.badges = state.badges.map(b => ({ ...b, unlocked: false }));
             app.init(false); // false = brak danych, pokaż ekran powitalny
         }
     } catch (e) {
@@ -110,12 +116,11 @@ const state = {
   userName: '',
   currentSection: 'dashboard',
   auditHistory: [],
-// ... (reszta obiektu state bez zmian) ...
   currentAudit: null,
   plan10Days: [],
   completedExercises: [],
   readArticles: [],
-  unlockedBadges: [],
+  unlockedBadges: [], // Ten stan będzie nadpisany przez `loadUserData`
   points: 0,
   streak: 0,
   lastActivityDate: null,
@@ -222,7 +227,6 @@ const state = {
   
   // Health consequences mapping
   healthConsequences: {
-// ... (reszta obiektu state bez zmian) ...
     krzeslo: {
       name: "Problemy z krzesłem i wysokością",
       urgency: "high",
@@ -346,7 +350,6 @@ const state = {
   
   // Plan 10-dniowy data
   challenges: [
-// ... (reszta obiektu state bez zmian) ...
     { day: 1, dayOfWeek: "Dzień 1", title: "Zacznij od audytu", task: "Wykonaj pełny audyt ergonomii - otrzymasz spersonalizowany plan działań", type: "audit", completed: false, completedDate: null },
     { day: 2, dayOfWeek: "Dzień 2", title: "Regulacja wysokości", task: "Dostosuj wysokość krzesła - stopy na podłodze, kolana pod 90°", type: "action", completed: false, completedDate: null },
     { day: 3, dayOfWeek: "Dzień 3", title: "Pozycja monitora", task: "Podnieś monitor - górna krawędź ekranu na wysokości oczu", type: "action", completed: false, completedDate: null },
@@ -361,7 +364,6 @@ const state = {
   
   // Exercises data
   exercises: {
-// ... (reszta obiektu state bez zmian) ...
     neckShoulders: {
       title: "Szyja i ramiona",
       icon: "fas fa-head-side-virus",
@@ -416,7 +418,6 @@ const state = {
   
   // Education articles
   articles: [
-// ... (reszta obiektu state bez zmian) ...
     {
       title: "Dlaczego ergonomia stanowiska jest ważna?",
       category: "Dlaczego to ważne",
@@ -457,7 +458,6 @@ const state = {
   
   // Gamification
   badges: [
-// ... (reszta obiektu state bez zmian) ...
     { id: 1, name: "Audyt się liczy", description: "Wykonaj swój pierwszy audyt ergonomii", icon: "fas fa-clipboard-check", points: 50, unlocked: false },
     { id: 2, name: "Zaczęty na poważnie", description: "Wykonaj pierwsze wyzwanie z planu", icon: "fas fa-forward", points: 50, unlocked: false },
     { id: 3, name: "Połowa drogi", description: "Wykonaj 5 dni z rzędu", icon: "fas fa-fire", points: 100, unlocked: false },
@@ -470,16 +470,12 @@ const state = {
   ],
   
   levels: [
-// ... (reszta obiektu state bez zmian) ...
     { name: "Bronze", minPoints: 0, maxPoints: 449, description: "Zaczynam audyt", percentage: "25%" },
     { name: "Silver", minPoints: 450, maxPoints: 899, description: "Robię postępy", percentage: "50%" },
     { name: "Gold", minPoints: 900, maxPoints: 1619, description: "Mistrz ergonomii", percentage: "90%" },
     { name: "Platinum", minPoints: 1620, maxPoints: 9999, description: "Legenda ergonomii - Quiz Bonusowy Odblokowany!", percentage: "90% (pełnia)" }
   ]
 };
-
-// CAŁY OBIEKT `storage` I `storageData` ZOSTAŁ USUNIĘTY.
-// PONIŻEJ ZNAJDUJE SIĘ ZASTĘPCZA LOGIKA APLIKACJI.
 
 // Application logic
 const app = {
@@ -492,13 +488,15 @@ const app = {
     }
     
     // Przygotuj obiekt do zapisu
+    // Używamy JSON.parse(JSON.stringify(...)) aby upewnić się, że zapisujemy czyste obiekty
+    // bez żadnych referencji, co jest dobrą praktyką przy Firestore.
     const dataToSave = {
       userName: state.userName,
-      auditHistory: state.auditHistory,
-      plan10Days: state.plan10Days,
+      auditHistory: JSON.parse(JSON.stringify(state.auditHistory)),
+      plan10Days: JSON.parse(JSON.stringify(state.plan10Days)),
       completedExercises: state.completedExercises,
       readArticles: state.readArticles,
-      badges: state.badges,
+      badges: JSON.parse(JSON.stringify(state.badges)),
       points: state.points,
       streak: state.streak,
       lastActivityDate: state.lastActivityDate,
@@ -513,8 +511,9 @@ const app = {
                              .collection('users').doc(userId)
                              .collection('app_data').doc('main');
                              
-        // Użyj `set` z `{ merge: true }`, aby zaktualizować lub utworzyć dokument
-        await userDocRef.set(dataToSave, { merge: true });
+        // Użyj `set` bez `{ merge: true }`, aby nadpisać cały stan.
+        // Jest to bezpieczniejsze, gdy zarządzamy całym stanem aplikacji.
+        await userDocRef.set(dataToSave);
         console.log("Dane pomyślnie zapisane w Firestore.");
 
     } catch (e) {
@@ -549,7 +548,6 @@ const app = {
   },
   
   showWelcomeScreen() {
-// ... (bez zmian) ...
     const welcomeScreen = document.getElementById('welcomeScreen');
     const app = document.getElementById('app');
     welcomeScreen.classList.remove('hidden');
@@ -557,7 +555,6 @@ const app = {
   },
   
   hideWelcomeScreen() {
-// ... (bez zmian) ...
     const welcomeScreen = document.getElementById('welcomeScreen');
     const app = document.getElementById('app');
     welcomeScreen.classList.add('hidden');
@@ -578,6 +575,8 @@ const app = {
     state.userName = name;
     // Zainicjuj plan 10-dniowy dla nowego użytkownika
     state.plan10Days = state.challenges.map(c => ({ ...c }));
+    // Zainicjuj odznaki
+    state.badges = state.badges.map(b => ({ ...b, unlocked: false }));
     
     // *** ZMIANA: Zapisz stan do Firestore zamiast localStorage ***
     await this.saveDataToFirestore(); 
@@ -595,12 +594,20 @@ const app = {
   },
   
   navigateTo(section) {
-// ... (bez zmian) ...
     // Update active menu item
     document.querySelectorAll('.menu-item').forEach(item => {
       item.classList.remove('active');
     });
-    event.currentTarget?.classList.add('active');
+    // Użyj `event.currentTarget` tylko jeśli event jest dostępny
+    if (event && event.currentTarget) {
+        event.currentTarget.classList.add('active');
+    } else {
+        // Spróbuj znaleźć element menu na podstawie sekcji
+        const menuItem = document.querySelector(`.menu-item[onclick*="app.navigateTo('${section}')"]`);
+        if (menuItem) {
+            menuItem.classList.add('active');
+        }
+    }
     
     // Hide all sections
     document.querySelectorAll('.section').forEach(s => {
@@ -644,19 +651,16 @@ const app = {
   },
   
   toggleSidebar() {
-// ... (bez zmian) ...
     const sidebar = document.getElementById('sidebar');
     sidebar.classList.toggle('open');
   },
   
   renderDashboard() {
-// ... (bez zmian) ...
     this.updateDashboardMetrics();
     this.updateGreeting();
   },
   
   updateGreeting() {
-// ... (bez zmian) ...
     // Get current challenge day
     const completedDays = state.plan10Days.filter(d => d.completed).length;
     const currentDay = state.plan10Days[completedDays] || state.plan10Days[state.plan10Days.length - 1];
@@ -664,11 +668,16 @@ const app = {
     // Use userName instead of day name
     const displayName = state.userName || 'Przyjaciół';
     document.getElementById('greetingTitle').textContent = `Witaj, ${displayName}! 🎯`;
-    document.getElementById('greetingSubtitle').textContent = `Dzisiaj czeka Cię: ${currentDay.title}`;
+    
+    if (currentDay) {
+        document.getElementById('greetingSubtitle').textContent = `Dzisiaj czeka Cię: ${currentDay.title}`;
+    } else {
+        document.getElementById('greetingSubtitle').textContent = 'Gratulacje, ukończyłeś wszystkie wyzwania!';
+    }
     
     // Update CTA button
     const ctaButton = document.getElementById('dashboardCTA');
-    if (currentDay.completed) {
+    if (currentDay && currentDay.completed) {
       ctaButton.innerHTML = '<i class="fas fa-check"></i> Gratulacje! Dzisiaj już wszystko zrobiłeś! 🎉';
       ctaButton.className = 'btn btn--success btn--lg';
     } else if (completedDays > 0) {
@@ -692,7 +701,6 @@ const app = {
   },
   
   updateDashboardMetrics() {
-// ... (bez zmian) ...
     // 1. Ergonomia
     const latestAudit = state.auditHistory[state.auditHistory.length - 1];
     const ergonomicsEl = document.getElementById('metricErgonomics');
@@ -761,7 +769,6 @@ const app = {
   },
   
   updateQuizBonusMetric() {
-// ... (bez zmian) ...
     const quizCard = document.getElementById('quizBonusCard');
     const metricQuiz = document.getElementById('metricQuiz');
     const quizStatus = document.getElementById('quizStatus');
@@ -814,7 +821,8 @@ const app = {
     }
     
     // Open Google Forms in new window
-    const quizLink = 'https://forms.google.com/placeholder';
+    // UWAGA: Ten link to placeholder. Wstaw tutaj prawdziwy link do swojego quizu.
+    const quizLink = 'https://forms.google.com/your-quiz-link-here'; 
     window.open(quizLink, '_blank');
     
     // Mark as completed and award points
@@ -837,7 +845,6 @@ const app = {
   },
   
   countHealthConsequences() {
-// ... (bez zmian) ...
     const latestAudit = state.auditHistory[state.auditHistory.length - 1];
     if (!latestAudit) return 0;
     
@@ -846,7 +853,6 @@ const app = {
   },
   
   calculateExercisesToday() {
-// ... (bez zmian) ...
     // Find today's challenge
     const completedDays = state.plan10Days.filter(d => d.completed).length;
     const currentDay = state.plan10Days[completedDays];
@@ -857,8 +863,9 @@ const app = {
     }
     
     // Count exercises completed today (simplified - counts all completed exercises)
+    // To jest uproszczenie - w bardziej złożonej logice, liczylibyśmy ćwiczenia z dzisiejszą datą
     const todayExerciseCount = state.completedExercises.length;
-    const targetExercises = 5; // Target for the day
+    const targetExercises = 5; // Target for the day (arbitralny, można dostosować)
     
     const percentage = Math.min(100, Math.round((todayExerciseCount / targetExercises) * 100));
     
@@ -866,7 +873,6 @@ const app = {
   },
   
   showMetricTooltip(metricId) {
-// ... (bez zmian) ...
     const tooltips = {
       'ergonomia': 'Ile procent Twojego stanowiska pracy jest ergonomicznie poprawne. Im wyżej, tym mniej będziesz chodzić do lekarza 🏥. Czemu nie 100%? Bo nie jesteś robotem... choć byłoby fajnie 🤖',
       'daily-challenge': 'Które z 10 dni wyzwań masz dzisiaj do wykonania. Może to bycie rewolucjonistą i dostosowanie monitora, a może spacer biurowy (aka "losowe poruszanie się po biurze" 😄)',
@@ -885,18 +891,15 @@ const app = {
   },
   
   hideMetricTooltip() {
-// ... (bez zmian) ...
     document.getElementById('metricTooltip').classList.remove('show');
   },
   
   handleDashboardCTA() {
-// ... (bez zmian) ...
     // Navigate to plan section
     this.navigateTo('plan');
   },
   
   renderAudit() {
-// ... (bez zmian) ...
     const content = document.getElementById('auditContent');
     
     let html = '<div class="audit-split-layout">';
@@ -1045,7 +1048,6 @@ const app = {
   },
   
   toggleAuditQuestion(sectionId, questionIdx) {
-// ... (bez zmian) ...
     const section = state.auditSections.find(s => s.id === sectionId);
     if (section && section.questions[questionIdx]) {
       section.questions[questionIdx].checked = !section.questions[questionIdx].checked;
@@ -1054,7 +1056,6 @@ const app = {
   },
   
   changeMonitorMode(mode) {
-// ... (bez zmian) ...
     const section = state.auditSections.find(s => s.id === 5);
     if (section) {
       section.mode = mode;
@@ -1063,7 +1064,6 @@ const app = {
   },
   
   toggleMonitorQuestion(type, idx) {
-// ... (bez zmian) ...
     const section = state.auditSections.find(s => s.id === 5);
     if (!section) return;
     
@@ -1075,7 +1075,6 @@ const app = {
   },
   
   toggleLaptopApplies() {
-// ... (bez zmian) ...
     const section = state.auditSections.find(s => s.id === 6);
     if (section) {
       section.applies = !section.applies;
@@ -1084,7 +1083,6 @@ const app = {
   },
   
   renderConsequencesPanel() {
-// ... (bez zmian) ...
     const uncheckedIssues = this.getUncheckedIssues();
     
     let html = `
@@ -1165,7 +1163,6 @@ const app = {
   },
   
   getUncheckedIssues() {
-// ... (bez zmian) ...
     const issues = {};
     
     state.auditSections.forEach(section => {
@@ -1218,7 +1215,6 @@ const app = {
   },
   
   updateConsequencesPanel() {
-// ... (bez zmian) ...
     const panel = document.getElementById('consequencesPanel');
     if (panel) {
       panel.innerHTML = this.renderConsequencesPanel();
@@ -1226,18 +1222,14 @@ const app = {
   },
   
   updateDashboardKPIs() {
-// ... (bez zmian) ...
     // Legacy function for compatibility
     this.updateDashboardMetrics();
   },
   
   // ZMODYFIKOWANA FUNKCJA: completeAudit()
   completeAudit() {
-    // *** ZMIANA: Usunięto storage.save() na początku ***
-    
     // Calculate score
     let totalWeight = 0;
-// ... (reszta logiki obliczania wyniku bez zmian) ...
     let achievedWeight = 0;
     let uncheckedItems = [];
     
@@ -1299,8 +1291,8 @@ const app = {
       }
     });
     
-    const score = Math.round((achievedWeight / totalWeight) * 100);
-    const statusInfo = this.getStatusInfo(score);
+    // Unikaj dzielenia przez zero, jeśli waga całkowita to 0
+    const score = totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 100;
     
     // Save audit result
     const auditResult = {
@@ -1313,19 +1305,19 @@ const app = {
     
     state.auditHistory.push(auditResult);
     
-    // *** ZMIANA: Zapis do Firestore zamiast storage.save() ***
-    // Zapisujemy stan PO dodaniu punktów i odznak
-    // this.saveDataToFirestore(); // Przeniesione po addPoints
-    
     // Check for badges
     this.checkBadge(1); // First audit
     
     // Check for transformation badge
     if (state.auditHistory.length > 1) {
       const firstScore = state.auditHistory[0].score;
-      const improvement = ((score - firstScore) / firstScore) * 100;
-      if (improvement >= 30) {
-        this.checkBadge(5); // Transformation
+      if (firstScore > 0) { // Unikaj dzielenia przez zero
+        const improvement = ((score - firstScore) / firstScore) * 100;
+        if (improvement >= 30) {
+          this.checkBadge(5); // Transformation
+        }
+      } else if (score > 30) { // Jeśli pierwszy wynik to 0, a nowy > 30
+          this.checkBadge(5);
       }
     }
     
@@ -1343,7 +1335,6 @@ const app = {
   },
   
   showPersonalizedPlan(auditResult) {
-// ... (bez zmian) ...
     const content = document.getElementById('auditContent');
     const statusInfo = this.getStatusInfo(auditResult.score);
     
@@ -1461,7 +1452,6 @@ const app = {
   },
   
   showAuditHistory() {
-// ... (bez zmian) ...
     if (state.auditHistory.length === 0) {
       this.showToast('Brak historii audytów', 'error');
       return;
@@ -1497,7 +1487,6 @@ const app = {
   },
   
   renderPlan() {
-// ... (bez zmian) ...
     // Update progress bar
     const completed = state.plan10Days.filter(d => d.completed).length;
     const percentage = Math.round((completed / state.plan10Days.length) * 100);
@@ -1519,16 +1508,19 @@ const app = {
     html += '<div style="display: inline-block; padding: var(--space-12) var(--space-24); background: var(--color-bg-5); border-radius: var(--radius-full); font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text);"><i class="fas fa-star" style="color: var(--color-warning);"></i> Tydzień 1: Podstawy to klucz!</div>';
     html += '</div>';
     
+    // Zapewnij, że siatka jest otoczona kontenerem
+    html += '<div class="plan-days-grid">'; 
+    
     state.plan10Days.forEach((day, idx) => {
       // Add week 2 motto before day 6
       if (idx === 5) {
+        // Zamknij starą siatkę i otwórz nową po motto
         html += '</div><div style="text-align: center; margin: var(--space-32) 0;"><div style="display: inline-block; padding: var(--space-12) var(--space-24); background: var(--color-bg-1); border-radius: var(--radius-full); font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); color: var(--color-text);"><i class="fas fa-flag-checkered" style="color: var(--color-primary);"></i> Tydzień 2: Finalna prosta!</div></div><div class="plan-days-grid">';
       }
       
       // Check if this challenge should be blocked
-      const isBlocked = completedToday && !day.completed && completedToday !== day;
+      const isBlocked = completedToday && !day.completed && completedToday.day !== day.day;
       
-      if (idx === 0) html += '<div class="plan-days-grid">';
       html += `
         <div class="plan-day-card ${day.completed ? 'completed' : ''} ${isBlocked ? 'blocked' : ''}">
           <div class="plan-day-header">
@@ -1557,12 +1549,11 @@ const app = {
       `;
     });
     
-    html += '</div>';
+    html += '</div>'; // Zamknij ostatnią siatkę
     content.innerHTML = html;
   },
   
   getDayTypeIcon(type) {
-// ... (bez zmian) ...
     const icons = {
       audit: 'fas fa-clipboard-check',
       action: 'fas fa-cog',
@@ -1576,7 +1567,6 @@ const app = {
   },
   
   getDayTypeLabel(type) {
-// ... (bez zmian) ...
     const labels = {
       audit: 'Audyt',
       action: 'Akcja',
@@ -1614,7 +1604,7 @@ const app = {
       challenge.completedDate = today;
       this.addPoints(50); // Ta funkcja zapisuje i aktualizuje streak
       this.updateStreak(); // Upewnij się, że streak jest aktualny
-      this.showToast('Dzień ukończony! +50 punktów', 'success'); // Zwiększono punkty do 50
+      this.showToast('Dzień ukończony! +50 punktów', 'success');
       
       // Check badges
       const completed = state.plan10Days.filter(d => d.completed).length;
@@ -1622,14 +1612,13 @@ const app = {
       if (completed >= 5) this.checkBadge(3); // 5 days
       if (completed >= 10) this.checkBadge(4); // 10 days
       
-      // *** ZMIANA: Zapis do Firestore (jest już w addPoints) ***
-      // this.saveDataToFirestore(); // Niepotrzebne, addPoints już to robi
+      // Zapis jest już w addPoints()
     } else {
-      // Allow unchecking (może warto to przemyśleć, ale na razie zostawiam)
+      // Allow unchecking
       challenge.completed = false;
       challenge.completedDate = null;
-      // *** ZMIANA: Zapis do Firestore ***
-      this.saveDataToFirestore(); // Zapisz stan po odznaczeniu
+      // Trzeba zaktualizować dane w bazie
+      this.saveDataToFirestore(); 
     }
     
     this.renderPlan();
@@ -1638,6 +1627,7 @@ const app = {
   // ZMODYFIKOWANA FUNKCJA: resetPlan()
   resetPlan() {
     // *** ZMIANA: Użycie własnego modala zamiast confirm() ***
+    // `confirm()` jest często blokowane w iframe
     this.showConfirmationModal(
       'Czy na pewno chcesz zresetować plan? Wszystkie postępy zostaną utracone.',
       () => {
@@ -1652,18 +1642,19 @@ const app = {
   
   // NOWA FUNKCJA: Modal potwierdzający (zastępuje confirm())
   showConfirmationModal(message, onConfirm) {
-      const modal = document.getElementById('exerciseModal'); // Użyjemy istniejącego modala
+      // Użyjmy modala ćwiczeń, bo już istnieje w HTML
+      const modal = document.getElementById('exerciseModal');
       const content = document.getElementById('exerciseModalContent');
 
       content.innerHTML = `
           <div style="padding: 20px; text-align: center;">
-              <h3 style="margin-bottom: 20px;">Potwierdzenie</h3>
-              <p style="margin-bottom: 30px; font-size: 1.1em;">${message}</p>
+              <h3 style="margin-bottom: 20px; color: var(--color-text);">Potwierdzenie</h3>
+              <p style="margin-bottom: 30px; font-size: 1.1em; color: var(--color-text-secondary);">${message}</p>
               <div style="display: flex; justify-content: center; gap: 20px;">
-                  <button class="btn btn--outline" id="confirmCancel">
+                  <button class="btn btn--outline" id="confirmCancelBtn">
                       <i class="fas fa-times"></i> Anuluj
                   </button>
-                  <button class="btn btn--primary" id="confirmOk">
+                  <button class="btn btn--primary" id="confirmOkBtn">
                       <i class="fas fa-check"></i> Potwierdź
                   </button>
               </div>
@@ -1672,17 +1663,17 @@ const app = {
 
       modal.classList.add('show');
 
-      document.getElementById('confirmOk').onclick = () => {
+      // Użyj .onclick, aby mieć pewność, że stare listenery są nadpisane
+      document.getElementById('confirmOkBtn').onclick = () => {
           onConfirm();
           this.closeExerciseModal();
       };
-      document.getElementById('confirmCancel').onclick = () => {
+      document.getElementById('confirmCancelBtn').onclick = () => {
           this.closeExerciseModal();
       };
   },
   
   renderExercises() {
-// ... (bez zmian) ...
     const content = document.getElementById('exercisesContent');
     let html = '<div class="exercise-categories">';
     
@@ -1712,7 +1703,6 @@ const app = {
   },
   
   startExercise(categoryKey, exerciseIdx) {
-// ... (bez zmian) ...
     const exercise = state.exercises[categoryKey].exercises[exerciseIdx];
     const modal = document.getElementById('exerciseModal');
     const content = document.getElementById('exerciseModalContent');
@@ -1782,8 +1772,7 @@ const app = {
         this.checkBadge(8); // Master of exercises
       }
       
-      // *** ZMIANA: Zapis do Firestore (jest już w addPoints) ***
-      // this.saveDataToFirestore(); // Niepotrzebne
+      // Zapis jest już w addPoints()
     }
     
     // Play sound (simple beep)
@@ -1800,7 +1789,6 @@ const app = {
   },
   
   closeExerciseModal() {
-// ... (bez zmian) ...
     const modal = document.getElementById('exerciseModal');
     if (modal.timerInterval) {
       clearInterval(modal.timerInterval);
@@ -1813,7 +1801,6 @@ const app = {
   },
   
   renderEducation() {
-// ... (bez zmian) ...
     const content = document.getElementById('educationContent');
     let html = '';
     
@@ -1836,7 +1823,6 @@ const app = {
   },
   
   openArticle(idx) {
-// ... (bez zmian) ...
     const article = state.articles[idx];
     const modal = document.getElementById('articleModal');
     const content = document.getElementById('articleModalContent');
@@ -1876,8 +1862,7 @@ const app = {
         this.checkBadge(7); // Educator
       }
       
-      // *** ZMIANA: Zapis do Firestore (jest już w addPoints) ***
-      // this.saveDataToFirestore(); // Niepotrzebne
+      // Zapis jest już w addPoints()
     }
     
     this.closeArticleModal();
@@ -1885,12 +1870,10 @@ const app = {
   },
   
   closeArticleModal() {
-// ... (bez zmian) ...
     document.getElementById('articleModal').classList.remove('show');
   },
   
   renderResults() {
-// ... (bez zmian) ...
     const content = document.getElementById('resultsContent');
     
     if (state.auditHistory.length === 0) {
@@ -2003,7 +1986,6 @@ const app = {
   },
   
   getStatusInfo(score) {
-// ... (bez zmian) ...
     if (score >= 85) return { label: 'Świetnie!', color: 'var(--color-success)' };
     if (score >= 70) return { label: 'Dobrze', color: 'var(--color-primary)' };
     if (score >= 50) return { label: 'Do poprawy', color: 'var(--color-warning)' };
@@ -2011,7 +1993,6 @@ const app = {
   },
   
   exportReport() {
-// ... (bez zmian) ...
     if (state.auditHistory.length === 0) {
       this.showToast('Brak danych do eksportu', 'error');
       return;
@@ -2054,7 +2035,6 @@ const app = {
   },
   
   renderGamification() {
-// ... (bez zmian) ...
     const content = document.getElementById('gamificationContent');
     
     // Determine current level
@@ -2120,7 +2100,6 @@ const app = {
   },
   
   getCurrentLevel() {
-// ... (bez zmian) ...
     let currentLevel = state.levels[0];
     for (const level of state.levels) {
       if (state.points >= level.minPoints) {
@@ -2131,13 +2110,12 @@ const app = {
   },
   
   getNextLevel() {
-// ... (bez zmian) ...
     for (const level of state.levels) {
       if (state.points < level.minPoints) {
         return level;
       }
     }
-    return null;
+    return null; // Już na najwyższym poziomie
   },
   
   // ZMODYFIKOWANA FUNKCJA: checkBadge()
@@ -2147,13 +2125,11 @@ const app = {
       badge.unlocked = true;
       this.addPoints(badge.points); // Ta funkcja już zapisuje do Firestore
       this.showBadgeUnlocked(badge);
-      // *** ZMIANA: Zapis do Firestore (jest już w addPoints) ***
-      // this.saveDataToFirestore(); // Niepotrzebne
+      // Zapis jest już w addPoints()
     }
   },
   
   showBadgeUnlocked(badge) {
-// ... (bez zmian) ...
     this.showToast(`🎉 Odznaka odblokowani: ${badge.name}! +${badge.points} pkt`, 'success');
     this.triggerConfetti();
   },
@@ -2205,7 +2181,6 @@ const app = {
   },
   
   showToast(message, type = 'success') {
-// ... (bez zmian) ...
     const toast = document.getElementById('toast');
     const icon = type === 'success' ? '<i class="fas fa-check-circle toast-icon"></i>' : '<i class="fas fa-exclamation-circle toast-icon"></i>';
     toast.innerHTML = icon + '<span>' + message + '</span>';
@@ -2217,7 +2192,6 @@ const app = {
   },
   
   triggerConfetti() {
-// ... (bez zmian) ...
     const canvas = document.getElementById('confetti');
     if (!canvas) return; // Zabezpieczenie
     const ctx = canvas.getContext('2d');
@@ -2258,7 +2232,10 @@ const app = {
       if (particles.length > 0) {
         animationFrameId = requestAnimationFrame(animate);
       } else {
-          cancelAnimationFrame(animationFrameId);
+          // Upewnij się, że anulujesz ramkę animacji, gdy nie ma cząsteczek
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+          }
       }
     };
     
@@ -2287,3 +2264,4 @@ window.addEventListener('load', () => {
         }
     });
 });
+
