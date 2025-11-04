@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+<!-- ... existing code ... -->
+    <title>Laboratorium Ergonomii 2.0</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- 
+      WAŻNE: Dodaj te trzy skrypty Firebase.
+      Są one niezbędne, aby app.js mógł połączyć się z bazą danych.
+    -->
+    <!-- POPRAWKA: Usunięto formatowanie Markdown [ ]( ) z linków -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js" defer></script>
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="welcome-screen">
+        <div class="welcome-content">
+            <div class="welcome-header">
+                <i class="fas fa-flask" style="font-size: 64px; color: var(--color-primary); margin-bottom: var(--space-24);"></i>
+                <h1 style="font-size: var(--font-size-4xl); margin-bottom: var(--space-16);">Witaj w Laboratorium Ergonomii! 🎯</h1>
+                <p style="font-size: var(--font-size-lg); color: var(--color-text-secondary); margin-bottom: var(--space-32);">Zacznijmy od poznania się!</p>
+            </div>
+            <div class="welcome-form">
+                <label class="form-label" for="userNameInput">Jak się masz na imię?</label>
+                <input type="text" id="userNameInput" class="form-control" placeholder="Wpisz swoje imię" style="text-align: center; font-size: var(--font-size-lg);">
+                <button class="btn btn--primary btn--lg btn--full-width" onclick="app.startAdventure()" style="margin-top: var(--space-20);">
+                    <i class="fas fa-rocket"></i> Zacznij przygodę
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-flask"></i>
+                    <span>Laboratorium<br>Ergonomii</span>
+                </div>
+                <button class="sidebar-toggle" onclick="app.toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item active" onclick="app.navigateTo('dashboard')">
+                    <i class="fas fa-home"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li class="menu-item" onclick="app.navigateTo('audit')">
+                    <i class="fas fa-clipboard-check"></i>
+                    <span>Audyt Ergonomii</span>
+                </li>
+                <li class="menu-item" onclick="app.navigateTo('plan')">
+                    <i class="fas fa-calendar-check"></i>
+                    <span>Wyzwania 10-dni</span>
+                </li>
+                <li class="menu-item" onclick="app.navigateTo('exercises')">
+                    <i class="fas fa-dumbbell"></i>
+                    <span>Ćwiczenia</span>
+                </li>
+                <li class="menu-item" onclick="app.navigateTo('education')">
+                    <i class="fas fa-book"></i>
+                    <span>Edukacja</span>
+                </li>
+                <li class="menu-item" onclick="app.navigateTo('results')">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Wyniki</span>
+                </li>
+                <li class="menu-item" onclick="app.navigateTo('gamification')">
+                    <i class="fas fa-trophy"></i>
+                    <span>Gamifikacja</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main id="mainContent" class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="section active">
+                <div class="dashboard-greeting">
+                    <h1 class="greeting-title" id="greetingTitle">Witaj, Poniedziałek! 🎯</h1>
+                    <p class="greeting-subtitle" id="greetingSubtitle">Dzisiaj czeka Cię: Zacznij od audytu</p>
+                </div>
+
+                <div class="dashboard-cta-container">
+                    <button class="btn btn--primary btn--lg" id="dashboardCTA" onclick="app.handleDashboardCTA()">
+                        <i class="fas fa-play"></i> Zacznij dzisiejsze wyzwanie
+                    </button>
+                </div>
+
+                <div class="motivational-quote">
+                    <i class="fas fa-lightbulb"></i>
+                    <p id="quoteText">Ergonomia to inwestycja w Twoje zdrowie - zmień nawyki dziś!</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <!-- Metric 1: Ergonomia -->
+                    <div class="metric-card metric-large metric-ergonomics">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-chair"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Twoja Ergonomia
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('ergonomia')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value" id="metricErgonomics">--</div>
+                            <div class="metric-progress" id="ergonomicsProgress"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 2: Dzisiejsze Wyzwanie -->
+                    <div class="metric-card metric-large metric-challenge">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Dzisiejsze Wyzwanie
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('daily-challenge')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value metric-value-text" id="metricChallenge">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 3: Streak -->
+                    <div class="metric-card metric-medium metric-streak">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Twój Streak
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('streak')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value" id="metricStreak">--</div>
+                            <div class="metric-unit">dni</div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 4: Odznaki -->
+                    <div class="metric-card metric-medium metric-badges">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-trophy"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Odblokowani Mistrzowie
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('badges')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value" id="metricBadges">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 5: Skutki zdrowotne -->
+                    <div class="metric-card metric-medium metric-health">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-heart-pulse"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Skutki do Eliminacji
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('health-consequences')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value" id="metricHealth">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 6: Ćwiczenia dzisiaj -->
+                    <div class="metric-card metric-medium metric-exercises">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-dumbbell"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Ćwiczenia Dzisiaj
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('exercises-today')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value" id="metricExercises">--</div>
+                            <div class="metric-progress-bar">
+                                <div class="metric-progress-fill" id="exercisesProgressFill"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 7: Gamifikacja Level -->
+                    <div class="metric-card metric-large metric-gamification">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Twój Postęp Gamifikacji
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('gamification-level')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value metric-value-text" id="metricLevel">--</div>
+                            <div class="metric-subvalue" id="metricPoints">--</div>
+                            <div class="metric-progress-bar">
+                                <div class="metric-progress-fill" id="levelProgressFill"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 8: Quiz Bonusowy -->
+                    <div class="metric-card metric-large metric-quiz" id="quizBonusCard" onclick="app.handleQuizBonus()" style="cursor: pointer;">
+                        <div class="metric-icon-wrapper">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-label">
+                                Quiz Bonusowy
+                                <button class="metric-info" onclick="event.stopPropagation(); app.showMetricTooltip('quiz-bonus')">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                            <div class="metric-value metric-value-text" id="metricQuiz">--</div>
+                            <div class="metric-subvalue" id="quizStatus">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tooltip -->
+                <div id="metricTooltip" class="metric-tooltip">
+                    <button class="tooltip-close" onclick="app.hideMetricTooltip()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="tooltip-content" id="tooltipContent"></div>
+                </div>
+            </section>
+
+            <!-- Audit Section -->
+            <section id="auditSection" class="section">
+                <div class="section-header-bar">
+                    <h2><i class="fas fa-clipboard-check"></i> Audyt Ergonomii</h2>
+                    <button class="btn btn--outline btn--sm" onclick="app.showAuditHistory()">
+                        <i class="fas fa-history"></i> Historia audytów
+                    </button>
+                </div>
+                <div id="auditContent"></div>
+            </section>
+
+            <!-- Plan 10-dniowy Section -->
+            <section id="planSection" class="section">
+                <div class="section-header-bar">
+                    <h2><i class="fas fa-calendar-check"></i> Wyzwania 10-dniowe</h2>
+                    <button class="btn btn--outline btn--sm" onclick="app.resetPlan()">
+                        <i class="fas fa-redo"></i> Resetuj plan
+                    </button>
+                </div>
+                <div class="plan-progress">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="planProgressFill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="planProgressText">0% ukończono</span>
+                        <span id="streakInfo">Streak: 0 dni</span>
+                    </div>
+                </div>
+                <div id="planContent" class="plan-days-grid"></div>
+            </section>
+
+            <!-- Exercises Section -->
+            <section id="exercisesSection" class="section">
+                <div class="section-header-bar">
+                    <h2><i class="fas fa-dumbbell"></i> Biblioteka Ćwiczeń</h2>
+                </div>
+                <div id="exercisesContent"></div>
+            </section>
+
+            <!-- Education Section -->
+            <section id="educationSection" class="section">
+                <div class="section-header-bar">
+                    <h2><i class="fas fa-book"></i> Edukacja</h2>
+                </div>
+                <div id="educationContent" class="articles-grid"></div>
+            </section>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="section">
+                <div class="section-header-bar">
+                    <h2><i class="fas fa-chart-line"></i> Moje Wyniki i Postęp</h2>
+                    <button class="btn btn--outline btn--sm" onclick="app.exportReport()">
+                        <i class="fas fa-download"></i> Eksportuj raport
+                    </button>
+                </div>
+                <div id="resultsContent"></div>
+            </section>
+
+            <!-- Gamification Section -->
+            <section id="gamificationSection" class="section">
+                <div class="section-header-bar">
+                    <h2><i class="fas fa-trophy"></i> Gamifikacja</h2>
+                </div>
+                <div id="gamificationContent"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for Exercise Timer -->
+    <div id="exerciseModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="app.closeExerciseModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="exerciseModalContent"></div>
+        </div>
+    </div>
+
+    <!-- Modal for Article Reader -->
+    <div id="articleModal" class="modal">
+        <div class="modal-content modal-large">
+            <button class="modal-close" onclick="app.closeArticleModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="articleModalContent"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Confetti Container -->
+    <canvas id="confetti" class="confetti-canvas"></canvas>
+
+    <script src="app.js"></script>
+</body>
+</html>
